@@ -45,7 +45,6 @@ namespace crow
 					if (!boost::iequals(req.get_header_value("upgrade"), "websocket"))
 					{
 						adaptor.close();
-						delete this;
 						return;
 					}
 
@@ -54,7 +53,6 @@ namespace crow
 						if (!accept_handler_(req))
 						{
 							adaptor.close();
-							delete this;
 							return;
 						}
 					}
@@ -83,7 +81,7 @@ namespace crow
 
                 void send_pong(const std::string& msg)
                 {
-                    dispatch([this, msg]{
+                    dispatch([this, _ = shared_from_this(), msg]{
                         char buf[3] = "\x8A\x00";
                         buf[1] += msg.size();
                         write_buffers_.emplace_back(buf, buf+2);
@@ -94,7 +92,7 @@ namespace crow
 
                 void send_binary(const std::string& msg) override
                 {
-                    dispatch([this, msg]{
+                    dispatch([this, _ = shared_from_this(), msg]{
                         auto header = build_header(2, msg.size());
                         write_buffers_.emplace_back(std::move(header));
                         write_buffers_.emplace_back(msg);
@@ -104,7 +102,7 @@ namespace crow
 
                 void send_text(const std::string& msg) override
                 {
-                    dispatch([this, msg]{
+                    dispatch([this, _ = shared_from_this(), msg]{
                         auto header = build_header(1, msg.size());
                         write_buffers_.emplace_back(std::move(header));
                         write_buffers_.emplace_back(msg);
@@ -114,7 +112,7 @@ namespace crow
 
                 void close(const std::string& msg) override
                 {
-                    dispatch([this, msg]{
+                    dispatch([this, _ = shared_from_this(), msg]{
                         has_sent_close_ = true;
                         if (has_recv_close_ && !is_close_handler_called_)
                         {
@@ -180,7 +178,7 @@ namespace crow
                             {
                                 //boost::asio::async_read(adaptor_.socket(), boost::asio::buffer(&mini_header_, 1), 
                                 adaptor_.socket().async_read_some(boost::asio::buffer(&mini_header_, 2), 
-                                    [this](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = shared_from_this()](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG
                                         bytes_transferred
 #endif
@@ -230,7 +228,7 @@ namespace crow
                                 remaining_length_ = 0;
                                 remaining_length16_ = 0;
                                 boost::asio::async_read(adaptor_.socket(), boost::asio::buffer(&remaining_length16_, 2), 
-                                    [this](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = shared_from_this()](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG
                                         bytes_transferred
 #endif
@@ -265,7 +263,7 @@ namespace crow
                         case WebSocketReadState::Len64:
                             {
                                 boost::asio::async_read(adaptor_.socket(), boost::asio::buffer(&remaining_length_, 8), 
-                                    [this](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = shared_from_this()](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG
                                         bytes_transferred
 #endif
@@ -298,7 +296,7 @@ namespace crow
                             break;
                         case WebSocketReadState::Mask:
                                 boost::asio::async_read(adaptor_.socket(), boost::asio::buffer((char*)&mask_, 4), 
-                                    [this](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = shared_from_this()](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG 
                                         bytes_transferred
 #endif
@@ -332,7 +330,7 @@ namespace crow
                                 if (remaining_length_ < to_read)
                                     to_read = remaining_length_;
                                 adaptor_.socket().async_read_some( boost::asio::buffer(buffer_, to_read), 
-                                    [this](const boost::system::error_code& ec, std::size_t bytes_transferred)
+                                    [this, _ = shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred)
                                     {
                                         is_reading = false;
 
@@ -485,8 +483,8 @@ namespace crow
                     if (!is_close_handler_called_)
                         if (close_handler_)
                             close_handler_(shared_from_this(), "uncleanly");
-                    if (sending_buffers_.empty() && !is_reading)
-                        delete this;
+                    //if (sending_buffers_.empty() && !is_reading)
+                        //delete this;
                 }
 			private:
 				Adaptor adaptor_;

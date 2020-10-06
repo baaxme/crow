@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <memory>
 #include <boost/lexical_cast.hpp>
+#include <boost/make_shared.hpp>
 #include <vector>
 
 #include "crow/common.h"
@@ -288,12 +289,12 @@ namespace crow
 
         void handle_upgrade(const request& req, response&, SocketAdaptor&& adaptor) override 
         {
-            new crow::websocket::Connection<SocketAdaptor>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
+          boost::make_shared<crow::websocket::Connection<SocketAdaptor>>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
         }
 #ifdef CROW_ENABLE_SSL
         void handle_upgrade(const request& req, response&, SSLAdaptor&& adaptor) override
         {
-            new crow::websocket::Connection<SSLAdaptor>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
+          boost::make_shared<crow::websocket::Connection<SSLAdaptor>>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
         }
 #endif
 
