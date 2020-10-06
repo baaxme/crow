@@ -60,12 +60,13 @@ namespace crow
 
 					// Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
 					// Sec-WebSocket-Version: 13
-                    std::string magic = req.get_header_value("Sec-WebSocket-Key") +  "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                    sha1::SHA1 s;
-                    s.processBytes(magic.data(), magic.size());
-                    uint8_t digest[20];
-                    s.getDigestBytes(digest);   
-                    start(crow::utility::base64encode((char*)digest, 20));
+                adaptor_.get_io_service().post([this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), magic = req.get_header_value("Sec-WebSocket-Key") +  "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"]{
+                  sha1::SHA1 s;
+                  s.processBytes(magic.data(), magic.size());
+                  uint8_t digest[20];
+                  s.getDigestBytes(digest);   
+                  start(crow::utility::base64encode((char*)digest, 20));
+                    });
 				}
 
                 template<typename CompletionHandler>
