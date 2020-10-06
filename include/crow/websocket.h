@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/array.hpp>
+#include <boost/enable_shared_from_this.hpp>
 #include "crow/socket_adaptors.h"
 #include "crow/http_request.h"
 #include "crow/TinySHA1.hpp"
@@ -18,29 +19,25 @@ namespace crow
             Payload,
         };
 
-		struct connection
+		struct connection_base : boost::enable_shared_from_this<connection_base>
 		{
             virtual void send_binary(const std::string& msg) = 0;
             virtual void send_text(const std::string& msg) = 0;
             virtual void close(const std::string& msg = "quit") = 0;
-            virtual ~connection(){}
-
-            void userdata(void* u) { userdata_ = u; }
-            void* userdata() { return userdata_; }
-
-        private:
-            void* userdata_;
+            virtual ~connection_base(){}
 		};
 
+    using connection = boost::shared_ptr<connection_base>;
+
 		template <typename Adaptor>
-        class Connection : public connection
+        class Connection : public connection_base
         {
 			public:
 				Connection(const crow::request& req, Adaptor&& adaptor, 
-						std::function<void(crow::websocket::connection&)> open_handler,
-						std::function<void(crow::websocket::connection&, const std::string&, bool)> message_handler,
-						std::function<void(crow::websocket::connection&, const std::string&)> close_handler,
-						std::function<void(crow::websocket::connection&)> error_handler,
+						std::function<void(crow::websocket::connection)> open_handler,
+						std::function<void(crow::websocket::connection, const std::string&, bool)> message_handler,
+						std::function<void(crow::websocket::connection, const std::string&)> close_handler,
+						std::function<void(crow::websocket::connection)> error_handler,
 						std::function<bool(const crow::request&)> accept_handler)
 					: adaptor_(std::move(adaptor)), open_handler_(std::move(open_handler)), message_handler_(std::move(message_handler)), close_handler_(std::move(close_handler)), error_handler_(std::move(error_handler))
 					, accept_handler_(std::move(accept_handler))
@@ -123,7 +120,7 @@ namespace crow
                         {
                             is_close_handler_called_ = true;
                             if (close_handler_)
-                                close_handler_(*this, msg);
+                                close_handler_(shared_from_this(), msg);
                         }
                         auto header = build_header(0x8, msg.size());
                         write_buffers_.emplace_back(std::move(header));
@@ -170,7 +167,7 @@ namespace crow
                     write_buffers_.emplace_back(crlf);
                     do_write();
                     if (open_handler_)
-                        open_handler_(*this);
+                        open_handler_(shared_from_this());
                     do_read();
                 }
 
@@ -222,7 +219,7 @@ namespace crow
                                             close_connection_ = true;
                                             adaptor_.close();
                                             if (error_handler_)
-                                                error_handler_(*this);
+                                                error_handler_(shared_from_this());
                                             check_destroy();
                                         }
                                     });
@@ -259,7 +256,7 @@ namespace crow
                                             close_connection_ = true;
                                             adaptor_.close();
                                             if (error_handler_)
-                                                error_handler_(*this);
+                                                error_handler_(shared_from_this());
                                             check_destroy();
                                         }
                                     });
@@ -293,7 +290,7 @@ namespace crow
                                             close_connection_ = true;
                                             adaptor_.close();
                                             if (error_handler_)
-                                                error_handler_(*this);
+                                                error_handler_(shared_from_this());
                                             check_destroy();
                                         }
                                     });
@@ -324,7 +321,7 @@ namespace crow
                                         {
                                             close_connection_ = true;
                                             if (error_handler_)
-                                                error_handler_(*this);
+                                                error_handler_(shared_from_this());
                                             adaptor_.close();
                                         }
                                     });
@@ -354,7 +351,7 @@ namespace crow
                                         {
                                             close_connection_ = true;
                                             if (error_handler_)
-                                                error_handler_(*this);
+                                                error_handler_(shared_from_this());
                                             adaptor_.close();
                                         }
                                     });
@@ -387,7 +384,7 @@ namespace crow
                                 if (is_FIN())
                                 {
                                     if (message_handler_)
-                                        message_handler_(*this, message_, is_binary_);
+                                        message_handler_(shared_from_this(), message_, is_binary_);
                                     message_.clear();
                                 }
                             }
@@ -398,7 +395,7 @@ namespace crow
                                 if (is_FIN())
                                 {
                                     if (message_handler_)
-                                        message_handler_(*this, message_, is_binary_);
+                                        message_handler_(shared_from_this(), message_, is_binary_);
                                     message_.clear();
                                 }
                             }
@@ -410,7 +407,7 @@ namespace crow
                                 if (is_FIN())
                                 {
                                     if (message_handler_)
-                                        message_handler_(*this, message_, is_binary_);
+                                        message_handler_(shared_from_this(), message_, is_binary_);
                                     message_.clear();
                                 }
                             }
@@ -429,7 +426,7 @@ namespace crow
                                     if (!is_close_handler_called_)
                                     {
                                         if (close_handler_)
-                                            close_handler_(*this, fragment_);
+                                            close_handler_(shared_from_this(), fragment_);
                                         is_close_handler_called_ = true;
                                     }
                                     check_destroy();
@@ -487,7 +484,7 @@ namespace crow
                     //if (has_sent_close_ && has_recv_close_)
                     if (!is_close_handler_called_)
                         if (close_handler_)
-                            close_handler_(*this, "uncleanly");
+                            close_handler_(shared_from_this(), "uncleanly");
                     if (sending_buffers_.empty() && !is_reading)
                         delete this;
                 }
@@ -514,10 +511,10 @@ namespace crow
                 bool pong_received_{false};
                 bool is_close_handler_called_{false};
 
-				std::function<void(crow::websocket::connection&)> open_handler_;
-				std::function<void(crow::websocket::connection&, const std::string&, bool)> message_handler_;
-				std::function<void(crow::websocket::connection&, const std::string&)> close_handler_;
-				std::function<void(crow::websocket::connection&)> error_handler_;
+				std::function<void(crow::websocket::connection)> open_handler_;
+				std::function<void(crow::websocket::connection, const std::string&, bool)> message_handler_;
+				std::function<void(crow::websocket::connection, const std::string&)> close_handler_;
+				std::function<void(crow::websocket::connection)> error_handler_;
 				std::function<bool(const crow::request&)> accept_handler_;
         };
     }

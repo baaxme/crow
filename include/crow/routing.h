@@ -333,10 +333,10 @@ namespace crow
         }
 
     protected:
-        std::function<void(crow::websocket::connection&)> open_handler_;
-        std::function<void(crow::websocket::connection&, const std::string&, bool)> message_handler_;
-        std::function<void(crow::websocket::connection&, const std::string&)> close_handler_;
-        std::function<void(crow::websocket::connection&)> error_handler_;
+        std::function<void(crow::websocket::connection)> open_handler_;
+        std::function<void(crow::websocket::connection, const std::string&, bool)> message_handler_;
+        std::function<void(crow::websocket::connection, const std::string&)> close_handler_;
+        std::function<void(crow::websocket::connection)> error_handler_;
         std::function<bool(const crow::request&)> accept_handler_;
     };
 
