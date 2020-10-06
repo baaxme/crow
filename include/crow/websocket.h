@@ -58,16 +58,34 @@ namespace crow
 						}
 					}
 
+				}
+
+                void start(const crow::request& req)
+                {
 					// Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
 					// Sec-WebSocket-Version: 13
-                adaptor_.get_io_service().post([this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), magic = req.get_header_value("Sec-WebSocket-Key") +  "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"]{
-                  sha1::SHA1 s;
-                  s.processBytes(magic.data(), magic.size());
-                  uint8_t digest[20];
-                  s.getDigestBytes(digest);   
-                  start(crow::utility::base64encode((char*)digest, 20));
-                    });
-				}
+            std::string magic = req.get_header_value("Sec-WebSocket-Key") +  "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+            sha1::SHA1 s;
+            s.processBytes(magic.data(), magic.size());
+            uint8_t digest[20];
+            s.getDigestBytes(digest);   
+            std::string&& hello = crow::utility::base64encode((char*)digest, 20);
+
+                    static std::string header = "HTTP/1.1 101 Switching Protocols\r\n"
+                        "Upgrade: websocket\r\n"
+                        "Connection: Upgrade\r\n"
+                        "Sec-WebSocket-Accept: ";
+                    static std::string crlf = "\r\n";
+                    write_buffers_.emplace_back(header);
+                    write_buffers_.emplace_back(std::move(hello));
+                    write_buffers_.emplace_back(crlf);
+                    write_buffers_.emplace_back(crlf);
+                    do_write();
+                    if (open_handler_)
+                        open_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                    do_read();
+                }
+
 
                 template<typename CompletionHandler>
                 void dispatch(CompletionHandler handler)
@@ -154,22 +172,6 @@ namespace crow
                     }
                 }
 
-                void start(std::string&& hello)
-                {
-                    static std::string header = "HTTP/1.1 101 Switching Protocols\r\n"
-                        "Upgrade: websocket\r\n"
-                        "Connection: Upgrade\r\n"
-                        "Sec-WebSocket-Accept: ";
-                    static std::string crlf = "\r\n";
-                    write_buffers_.emplace_back(header);
-                    write_buffers_.emplace_back(std::move(hello));
-                    write_buffers_.emplace_back(crlf);
-                    write_buffers_.emplace_back(crlf);
-                    do_write();
-                    if (open_handler_)
-                        open_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
-                    do_read();
-                }
 
                 void do_read()
                 {

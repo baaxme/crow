@@ -289,12 +289,16 @@ namespace crow
 
         void handle_upgrade(const request& req, response&, SocketAdaptor&& adaptor) override 
         {
-          boost::make_shared<crow::websocket::Connection<SocketAdaptor>>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
+          auto con = boost::make_shared<crow::websocket::Connection<SocketAdaptor>>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
+
+            con->start(req);
         }
 #ifdef CROW_ENABLE_SSL
         void handle_upgrade(const request& req, response&, SSLAdaptor&& adaptor) override
         {
-          boost::make_shared<crow::websocket::Connection<SSLAdaptor>>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
+          auto conn = boost::make_shared<crow::websocket::Connection<SSLAdaptor>>(req, std::move(adaptor), open_handler_, message_handler_, close_handler_, error_handler_, accept_handler_);
+
+          conn->start(req);
         }
 #endif
 
