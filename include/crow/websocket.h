@@ -20,8 +20,7 @@ namespace crow
             Payload,
         };
 
-		struct connection_base
-		{
+		struct connection_base : public boost::enable_shared_from_this<connection_base> {
             virtual void send_binary(const std::string& msg) = 0;
             virtual void send_text(const std::string& msg) = 0;
             virtual void close(const std::string& msg = "quit") = 0;
@@ -31,7 +30,7 @@ namespace crow
     using connection = boost::shared_ptr<connection_base>;
 
 		template <typename Adaptor>
-        class Connection : public boost::enable_shared_from_this<Connection<Adaptor>>, public connection_base
+        class Connection : public connection_base
         {
 			public:
 				Connection(const crow::request& req, Adaptor&& adaptor, 
@@ -82,7 +81,7 @@ namespace crow
                     write_buffers_.emplace_back(crlf);
                     do_write();
                     if (open_handler_)
-                        open_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                        open_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()));
                     do_read();
                 }
 
@@ -101,7 +100,7 @@ namespace crow
 
                 void send_pong(const std::string& msg)
                 {
-                    dispatch([this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), msg]{
+                    dispatch([this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), msg]{
                         char buf[3] = "\x8A\x00";
                         buf[1] += msg.size();
                         write_buffers_.emplace_back(buf, buf+2);
@@ -112,7 +111,7 @@ namespace crow
 
                 void send_binary(const std::string& msg) override
                 {
-                    dispatch([this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), msg]{
+                    dispatch([this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), msg]{
                         auto header = build_header(2, msg.size());
                         write_buffers_.emplace_back(std::move(header));
                         write_buffers_.emplace_back(msg);
@@ -122,7 +121,7 @@ namespace crow
 
                 void send_text(const std::string& msg) override
                 {
-                    dispatch([this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), msg]{
+                    dispatch([this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), msg]{
                         auto header = build_header(1, msg.size());
                         write_buffers_.emplace_back(std::move(header));
                         write_buffers_.emplace_back(msg);
@@ -132,13 +131,13 @@ namespace crow
 
                 void close(const std::string& msg) override
                 {
-                    dispatch([this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), msg]{
+                    dispatch([this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), msg]{
                         has_sent_close_ = true;
                         if (has_recv_close_ && !is_close_handler_called_)
                         {
                             is_close_handler_called_ = true;
                             if (close_handler_)
-                                close_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), msg);
+                                close_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), msg);
                         }
                         auto header = build_header(0x8, msg.size());
                         write_buffers_.emplace_back(std::move(header));
@@ -182,7 +181,7 @@ namespace crow
                             {
                                 //boost::asio::async_read(adaptor_.socket(), boost::asio::buffer(&mini_header_, 1), 
                                 adaptor_.socket().async_read_some(boost::asio::buffer(&mini_header_, 2), 
-                                    [this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this()](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this())](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG
                                         bytes_transferred
 #endif
@@ -221,7 +220,7 @@ namespace crow
                                             close_connection_ = true;
                                             adaptor_.close();
                                             if (error_handler_)
-                                                error_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                                                error_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()));
                                             check_destroy();
                                         }
                                     });
@@ -232,7 +231,7 @@ namespace crow
                                 remaining_length_ = 0;
                                 remaining_length16_ = 0;
                                 boost::asio::async_read(adaptor_.socket(), boost::asio::buffer(&remaining_length16_, 2), 
-                                    [this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this()](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this())](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG
                                         bytes_transferred
 #endif
@@ -258,7 +257,7 @@ namespace crow
                                             close_connection_ = true;
                                             adaptor_.close();
                                             if (error_handler_)
-                                                error_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                                                error_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()));
                                             check_destroy();
                                         }
                                     });
@@ -267,7 +266,7 @@ namespace crow
                         case WebSocketReadState::Len64:
                             {
                                 boost::asio::async_read(adaptor_.socket(), boost::asio::buffer(&remaining_length_, 8), 
-                                    [this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this()](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this())](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG
                                         bytes_transferred
 #endif
@@ -292,7 +291,7 @@ namespace crow
                                             close_connection_ = true;
                                             adaptor_.close();
                                             if (error_handler_)
-                                                error_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                                                error_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()));
                                             check_destroy();
                                         }
                                     });
@@ -300,7 +299,7 @@ namespace crow
                             break;
                         case WebSocketReadState::Mask:
                                 boost::asio::async_read(adaptor_.socket(), boost::asio::buffer((char*)&mask_, 4), 
-                                    [this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this()](const boost::system::error_code& ec, std::size_t 
+                                    [this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this())](const boost::system::error_code& ec, std::size_t 
 #ifdef CROW_ENABLE_DEBUG 
                                         bytes_transferred
 #endif
@@ -323,7 +322,7 @@ namespace crow
                                         {
                                             close_connection_ = true;
                                             if (error_handler_)
-                                                error_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                                                error_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()));
                                             adaptor_.close();
                                         }
                                     });
@@ -334,7 +333,7 @@ namespace crow
                                 if (remaining_length_ < to_read)
                                     to_read = remaining_length_;
                                 adaptor_.socket().async_read_some( boost::asio::buffer(buffer_, to_read), 
-                                    [this, _ = boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this()](const boost::system::error_code& ec, std::size_t bytes_transferred)
+                                    [this, _ = boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this())](const boost::system::error_code& ec, std::size_t bytes_transferred)
                                     {
                                         is_reading = false;
 
@@ -353,7 +352,7 @@ namespace crow
                                         {
                                             close_connection_ = true;
                                             if (error_handler_)
-                                                error_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this());
+                                                error_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()));
                                             adaptor_.close();
                                         }
                                     });
@@ -386,7 +385,7 @@ namespace crow
                                 if (is_FIN())
                                 {
                                     if (message_handler_)
-                                        message_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), message_, is_binary_);
+                                        message_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), message_, is_binary_);
                                     message_.clear();
                                 }
                             }
@@ -397,7 +396,7 @@ namespace crow
                                 if (is_FIN())
                                 {
                                     if (message_handler_)
-                                        message_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), message_, is_binary_);
+                                        message_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), message_, is_binary_);
                                     message_.clear();
                                 }
                             }
@@ -409,7 +408,7 @@ namespace crow
                                 if (is_FIN())
                                 {
                                     if (message_handler_)
-                                        message_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), message_, is_binary_);
+                                        message_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), message_, is_binary_);
                                     message_.clear();
                                 }
                             }
@@ -428,7 +427,7 @@ namespace crow
                                     if (!is_close_handler_called_)
                                     {
                                         if (close_handler_)
-                                            close_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), fragment_);
+                                            close_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), fragment_);
                                         is_close_handler_called_ = true;
                                     }
                                     check_destroy();
@@ -486,7 +485,7 @@ namespace crow
                     //if (has_sent_close_ && has_recv_close_)
                     if (!is_close_handler_called_)
                         if (close_handler_)
-                            close_handler_(boost::enable_shared_from_this<Connection<Adaptor>>::shared_from_this(), "uncleanly");
+                            close_handler_(boost::dynamic_pointer_cast<Connection<Adaptor>>(shared_from_this()), "uncleanly");
                     //if (sending_buffers_.empty() && !is_reading)
                         //delete this;
                 }
